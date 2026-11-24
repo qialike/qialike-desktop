@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!--
+      The shell's loading page, served from `qialike-app://shell/` and shown in
+      the window while the Host boots. It is deliberately dependency-free: no
+      script bundle, no font download, no network request. Its whole purpose is
+      to render when the rest of the application cannot yet, and a page that
+      needed the application to load would show the user a blank frame at exactly
+      the moment they are wondering whether it started.
+    -->
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'" />
+    <title>Qialike</title>
+    <style>
+      :root { color-scheme: dark }
+      html, body { height: 100%; margin: 0 }
+      body {
+        display: flex; align-items: center; justify-content: center;
+        background: #1b1c20; color: #e8e9ed;
+        font: 14px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+        -webkit-user-select: none; user-select: none;
+      }
+      main { text-align: center; max-width: 34rem; padding: 2rem }
+      .mark { font-size: 30px; font-weight: 600; letter-spacing: .02em; margin: 0 0 .35rem }
+      .sub { color: #9a9ca6; margin: 0 0 1.6rem }
+      .dots { display: inline-flex; gap: .4rem; align-items: center; height: 1rem }
+      .dots i {
+        width: .4rem; height: .4rem; border-radius: 50%;
+        background: currentColor; opacity: .25;
+        animation: pulse 1.2s ease-in-out infinite;
+      }
+      .dots i:nth-child(2) { animation-delay: .15s }
+      .dots i:nth-child(3) { animation-delay: .3s }
+      @keyframes pulse { 0%, 100% { opacity: .25 } 50% { opacity: .9 } }
+      /* Reduce Motion is honoured: a spinner that will not stop is worse for
+         someone who asked for stillness than no spinner at all. */
+      @media (prefers-reduced-motion: reduce) {
+        .dots i { animation: none; opacity: .6 }
+      }
+      .detail { color: #7d7f89; font-size: 12px; margin-top: 1.6rem; min-height: 1.2em }
+      .detail code { color: #a9abb5 }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1 class="mark">Qialike</h1>
+      <p class="sub">Starting the local agent host…</p>
+      <div class="dots" role="status" aria-label="Starting"><i></i><i></i><i></i></div>
+      <p class="detail" id="detail"></p>
+    </main>
+    <script>
+      // The shell replaces this page with the product document once the Host is
+      // ready, so this script only has to explain a wait that is running long.
+      // It reads nothing from the application: the elapsed time is all it knows.
+      const started = Date.now()
+      const detail = document.getElementById('detail')
+      const tick = () => {
+        const seconds = Math.round((Date.now() - started) / 1000)
+        if (seconds < 8) { detail.textContent = ''; return }
+        detail.textContent = seconds < 45
+          ? `Still starting (${seconds}s). A first launch has more to do.`
+          : `Still starting (${seconds}s). If this does not finish, quit and relaunch; the host log names the cause.`
+      }
+      setInterval(tick, 1000)
+      tick()
+    </script>
+  </body>
+</html>

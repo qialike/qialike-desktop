@@ -1,0 +1,419 @@
+# The qialike desktop bundle patch.
+#
+# This is the last layer of the `qialike-desktop` profile, applied after
+# `dsh-base` and `dsh-web-app`. It is a top-level YAML array of loader patch
+# entries: a row naming an existing `id` overrides that row, and an entry with
+# `insert:` adds new rows.
+#
+# PATCH SEMANTICS — read before editing. A patch assigns per KEY, not per row:
+# the include's `applyEntryPatches` copies each key of the patch onto the target
+# entry, so `config` is replaced wholesale while `disabled` changes only when the
+# patch states it. A row with no keys at all is therefore INERT — it documents an
+# intention and changes nothing. The qialike CLI's patch file has three such rows
+# today; do not copy that pattern here.
+#
+# THE SURFACE THIS COMPOSES. The desktop application is the harness browser
+# surface (dsh-base + dsh-web-app) rendered in Electron, not a terminal UI. Every
+# client-side feature this bundle adds is registered as a browser plugin through
+# `dsh.client`, and every host-side row talks to harness services. Nothing here
+# targets Ink.
+#
+# ORDERING. Rows are applied after dsh-web-app, so `disabled: true` on a web row
+# is how a qialike client plugin takes over that surface (see ui-brand-official
+# below). Prefer disabling a specific row over replacing a whole feature.
+
+# ── a safety default the base now ships the other way ───────────────────────
+
+# 0.2.2 turned `fs-observation-policy` OFF in `dsh-base`. That policy is what makes `write` and
+# `edit` refuse to modify a file the model has not read, and this application wants it ON: the agent
+# editing a file it never looked at is precisely the failure the policy exists to prevent.
+#
+# STATED AS AN EXPLICIT `disabled: false` RATHER THAN LEFT ABSENT, and that is the whole point of
+# writing it down. Absence now means the opposite of what it meant in 0.2.1 — a loader patch assigns
+# per key, so a row that says nothing about `disabled` inherits the base's `true`. A future upstream
+# flip would therefore re-open this hole with no diff anywhere in this repository. The qialike CLI
+# pins the same value for the same reason; this is the desktop surface saying it independently.
+- id: fs-observation-policy
+  disabled: false
+
+# ── web search: the per-search API, not the Messages tool ───────────────────
+
+# 0.2.2-rc.5 REMOVED `searchProvider` FROM THE BASE `web` ROW, so with nothing pinned `dsh-web`
+# selects per model route: on `deepseek-official` / `deepseek-account` it runs `deepseek-official` —
+# a Messages request carrying the server-side `web_search_20250305` tool — and `deepseek-search-api`
+# everywhere else. That default is wrong here for two reasons, and the second is the serious one:
+#
+#   · BILLING. A Messages search is free per search but is an auxiliary MODEL REQUEST, so up to
+#     `maxUses` (5) server-side searches land on the token bill. The Search API is a flat
+#     per-search charge that does not grow with context, so a long session costs less under it.
+#
+#   · ENDPOINT, which is the one that matters. `web-search-deepseek` deliberately does NOT follow the
+#     model provider's base URL: it reads its own `baseURL`, else `$DEEPSEEK_SEARCH_BASE_URL`, else
+#     the official endpoint. This application lets a user OVERRIDE the built-in `deepseek-official`
+#     route's baseURL (`effectiveProviders`, in the provider layer it ships), so following the route
+#     default would send that gateway's key to the OFFICIAL endpoint — either a credential failure or
+#     a charge on the official account. That is the same class of bug as the sibling-route leak fixed
+#     in 0.5.1: a credential belonging to one route used against another.
+#
+# PINNED HERE RATHER THAN INHERITED, for the reason the `fs-observation-policy` row above states:
+# upstream's default is a moving target, and a deployment that wants route-following can still
+# override this row in its own profile patch. `DSH_WEB_SEARCH_PROVIDER` feeds the same field.
+- id: web
+  config:
+    searchProvider: deepseek-search-api
+    fetchProvider: http
+
+# ── surface-specific values the base deliberately omits ─────────────────────
+
+# The persona the desktop surface runs under. The web bundle leaves the prefix
+# to the base; this restates the whole `config`, so every key the row owns must
+# appear here.
+- id: system-prompt
+  config:
+    persona: >-
+      You are a coding agent powered by the {{model}} model. Your working directory is {{cwd}}.
+
+# ── tools: the two workspace mutations the fs seam does not expose ──────────
+#
+# `delete` and `move`. The harness's fs seam publishes only `writeText` and
+# `editText` — and `writeText` already creates parent directories, so `mkdir` needs
+# no tool of its own — which leaves exactly two workspace mutations a model cannot
+# perform. They matter more here than in a terminal client: every Windows shell call
+# runs through the ACL restricted-token runner, and a Linux host with neither bwrap
+# nor Landlock fails shell calls closed, so on those hosts the shell is not a
+# workaround for a missing tool.
+#
+# They read the SAME session policy as the fs sandbox, but fence on the workspace
+# root ALONE — not on `writableRoots()`, which adds the temp directories because
+# mkstemp-style writes need them, with no matching need to delete inside the host's
+# shared temp tree.
+#
+# MOUNTED ON THE HOST PLANE, unlike the preset's `tool-fs`/`tool-bash`. The web
+# surface moves the agent plane behind per-session presets, and a registry of this
+# shape is host+per-scope layered: a row here registers into the global layer, which
+# every agent's scope chain merges. The alternative — editing
+# `@deepseek-ai/dsh-agent-preset`'s `config.plugins` — would work and is worse: this
+# patch's semantics replace `config` wholesale, so it would fork the upstream
+# preset's plugin list into this file and leave it to drift.
+#
+# It does mean the two tools are visible to every preset, including `minimal`, which
+# omits `tool-fs` and so has no `write`/`edit`. That is consistent rather than a
+# widening: `minimal` still carries `tool-bash-persistent`, so it never lacked the
+# ability to mutate files — what it omits is the fs seam — and the binding boundary
+# is the sandbox policy, which fences these tools exactly as it fences the shell.
+- insert:
+    - id: qialike-fs-tools
+      name: '@qialike/qialike-app/fs-tools'
+
+# ── policy: the secrets read guard and the shell fences ─────────────────────
+#
+# WHY THIS ROW EXISTS. The harness's `SandboxMode` promises FILE EFFECTS only, and
+# every backend grants the whole host root read-only, so nothing below the tool layer
+# stops a model — or an injected page driving one — from reading the user's secrets.
+# The CLI closes that with a `tools/pre-execute` listener in its app entry, and this
+# profile does not mount that entry: it statically imports `ink` and `react`.
+# Without this row the product would ship with no secrets guard while DESIGN §7.5
+# documented one, which is precisely the state this row was added to end.
+#
+# The decisions are the CLI's own functions, compiled from its sources at build time
+# (`apps/desktop-bin/lib/cli-policy.mjs`) rather than reimplemented, so there is no
+# second copy of the rules to drift. The row itself lives in this repository because
+# the CLI does not publish those modules as subpaths — see the compile step.
+- insert:
+    - id: qialike-policy
+      name: '@qialike/qialike-desktop-policy'
+
+# ── provider catalogue: displace the base LLM rows ──────────────────────────
+#
+# These three rows are what the base bundle mounts to give the profile a model
+# layer. `qialike-llm` (below) provides the same capability from the CLI's own
+# adapter, so leaving them enabled would offer two owners for the same routes —
+# `deepseek-official` in particular, which the CLI's adapter serves itself as a
+# built-in profile.
+#
+# The row id `llm` (the `@deepseek-ai/dsh-llm` service) is deliberately NOT
+# disabled: it is the registry our adapter registers *into*, not a provider.
+- id: llm-pi-ai
+  disabled: true
+- id: llm-deepseek
+  disabled: true
+- id: llm-deepseek-account
+  disabled: true
+
+# ── provider catalogue: qialike's own ───────────────────────────────────────
+#
+# The CLI's provider catalogue, re-hosted. `@qialike/qialike-app/llm` is the
+# CLI's *built* module (its build compiled `src/llm.ts`), consumed as an artifact
+# the way the design requires (DESIGN §5.1); the wrapper row exists to give the
+# desktop a place for its own additions and to name the row `qialike-llm`.
+#
+# THE ID IS LOAD-BEARING. Three things have to spell the same string: this row's
+# id, the `settingsNs` the CLI's provider directory advertises (its `TUI_LLM_NS`),
+# and the namespace `settings.describe()` reports — which is derived from the row
+# id (`ns: entry.options.id`). Renaming this row without renaming the CLI's
+# constant silently detaches provider configuration from the Models page.
+#
+# Configuration comes from `qialike.json`, the file the CLI already owns, so both
+# products read one set of provider profiles. The harness's own settings document
+# could not serve: it lives per-profile (`<profile.home>/settings.yaml`), so a
+# value written there is invisible to the CLI's `tui` profile.
+- insert:
+    - id: qialike-llm
+      name: '@qialike/qialike-desktop-providers/llm'
+
+# ── provider catalogue: the four loadable gateway groups ────────────────────
+#
+# The remaining 17 routes. The CLI ships these as *loadable sibling plugins* of
+# its model layer — each one registers its templates through the
+# `tuiLlmTemplates` service `qialike-llm` provides, and each reads its own
+# switch from `qialike.json`:
+#
+#     { "opencode": { "enabled": false }, "foreign_gateways": { … } }
+#
+# So they are named directly, with no wrapper: there is nothing for this build to
+# add to them. They are also the reason the CLI split them out — a user who wants
+# no Azure pays for no Azure.
+#
+# THE SWITCH KEYS ARE NOT THE OLD NAMESPACE NAMES. They are `opencode`, `azure`,
+# `china_gateways` and `foreign_gateways` (the CLI's `PluginSectionKey`). The
+# `qialike-*` spellings are what these sections were called when harness 0.1.5 let
+# a plugin register a settings namespace, and 0.1.7 removed that
+# (`SECTION_NAMESPACES` keeps them only as the migration source). A user following
+# the older documentation would write a key nothing reads.
+#
+# Each row is a separate entry so one group can be dropped without touching the
+# others, and so a failure names the group that failed.
+- insert:
+    - id: qialike-opencode
+      name: '@qialike/qialike-app/opencode'
+- insert:
+    - id: qialike-china-gateways
+      name: '@qialike/qialike-app/china-gateways'
+- insert:
+    - id: qialike-foreign-gateways
+      name: '@qialike/qialike-app/foreign-gateways'
+- insert:
+    - id: qialike-azure
+      name: '@qialike/qialike-app/azure'
+
+# ── theme: the CLI's colour schemes, and the picker that chooses one ────────
+#
+# The 15 schemes the CLI ships (13 classic skins plus Atom's One Light and One Dark)
+# plus any `$DSH_HOME/themes/*.json` the user keeps, as `ThemeDefinition`s this
+# surface can select — and a `settings.general.item` row that chooses between them
+# and the harness's own light/dark/system preference.
+#
+# The row exists because a client bundle reaches the browser only through a *mounted
+# Loader row*: the client-module scanner walks the host Loader's entries and reads
+# the manifests they name, so a package that declares `dsh.client` and is never
+# mounted is discovered by nothing. Same shape as `qialike-brand` above.
+#
+# The schemes and the stored preference come from the Host over an HTTP route rather
+# than being carried in the bundle: user schemes live in `$DSH_HOME/themes` and can
+# only be read there, and the palette→token mapping is unit-tested Host-side, which
+# the hand-written browser bundle is not. The preference itself is stored in
+# `qialike.json` under the CLI's own `theme` section, so `/theme dracula` in the
+# terminal and a click here are the same act.
+- insert:
+    - id: qialike-theme
+      name: '@qialike/qialike-desktop-theme'
+
+# ── edit follow: point the preview at the file the agent is editing ─────────
+#
+# A `settings.general.item` switch (on by default) and the engine behind it: when the
+# agent edits a file, the right Sidebar's document preview moves to that file.
+#
+# Only the *navigation* half is code. A preview that is already open already reloads
+# itself when its file changes — the document-preview tab subscribes to the file
+# resource, and that was measured working for external writes as well as tool writes
+# (docs/desktop/edit-follow-analysis.md §10) — so this row adds no refresh of its own.
+#
+# It reads the agent's tool calls out of the published chat snapshot
+# (`ChatSnapshot.nodes.values()`) rather than claiming the keyed `tool.call.toolview`
+# slot: claiming `write`/`edit` there would replace the harness's own diff card. No
+# slot is registered and nothing is added to the transcript.
+#
+# The three rules that make an on-by-default navigation defensible — never while the
+# column is collapsed, stop when the user takes over, never for subagents — are
+# implemented in the bundle, and its tests fail if they regress.
+#
+# The switch is stored in `qialike.json` under a section of this row's own
+# (`desktop_edit_follow`), because the CLI types its own sections as a closed union
+# this repository must not extend, and because `qialike.json` is the file both
+# products read. `writeSection()` merges the document it read, so an unknown key
+# survives a CLI write.
+- insert:
+    - id: qialike-edit-follow
+      name: '@qialike/qialike-desktop-edit-follow'
+
+# ── the Office engine, when the build leaves it out ──────────────────────────
+#
+# The engine is a separate npm package and by far the largest thing this application
+# can ship -- 145 MiB unpacked on Linux, 182 MiB on Windows. A build can leave it out
+# (`QIALIKE_DESKTOP_OFFICE_ENGINE=plugin`), and then the document preview's Office
+# renderer has nothing to convert with. This row is how one comes back: it reports the
+# engine's state, fetches one from a registry on request, checks it against the
+# published digest, and puts the directory on `NODE_PATH` so the kit resolves it.
+#
+# WHY IT IS MOUNTED EVEN WHEN THE ENGINE IS BUNDLED. The row reads the resulting
+# state rather than a build flag, so a tree that carries an engine reports `bundled`
+# and offers nothing. One code path for both kinds of build, and a build that changes
+# its mind needs no second edit here.
+#
+# The client half ships in the same package (its manifest declares `dsh.client`) and
+# is discovered because this row mounts the package.
+- insert:
+    - id: qialike-office-engine
+      name: '@qialike/qialike-desktop-office-engine'
+
+# ── update: the manual check, next to the version it is about ────────────────
+#
+# WHY A SECOND UPDATE SURFACE, WHEN UPSTREAM ALREADY HAS A BADGE. The badge on the
+# sidebar toggle is passive by construction: it can only speak when an update exists,
+# so a user who wants to ask "am I up to date?" — the question people actually have —
+# has nowhere to ask it. This row is that place, and it sits in Settings beside the
+# version row so the question and its subject are in one view.
+#
+# The row is client-only. The update itself is the shell's (`electron-updater`, behind
+# the preload's `dshDesktop.updates` carrier), so there is no Host half to mount; this
+# entry exists so the harness discovers and serves the client bundle, exactly as the
+# office-engine entry above does for its own row.
+#
+# It also required two additions to that carrier — `check` (ask without downloading)
+# and `download` — because upstream's `open()` checks and downloads in one motion, and
+# a manual question must not silently commit the user to a 200 MB download.
+- insert:
+    - id: qialike-update
+      name: '@qialike/qialike-desktop-update'
+
+# ── providers: the settings API, and the page it serves ─────────────────────
+#
+# The host half of the provider editing UI: an authenticated route that reads and
+# writes `qialike.json`. The client half ships in the same package (its manifest
+# declares `dsh.client`), and is discovered because this row mounts the package —
+# the scanner looks at the mounted Loader entries, so a package that is never
+# mounted never reaches the browser.
+#
+# WHY A ROW OF ITS OWN, separate from `qialike-llm`. They fail differently and are
+# useful apart: `qialike-llm` mounts a model layer, this serves a settings surface.
+- insert:
+    - id: qialike-providers
+      name: '@qialike/qialike-desktop-providers'
+
+# ── providers: retire the upstream Models page ──────────────────────────────
+#
+# That page edits provider configuration through the harness settings namespace,
+# which is per-profile and therefore invisible to the CLI's `tui` profile. Ours
+# edits `qialike.json`, which both products read. Two pages editing one set of
+# providers through different stores would disagree on screen.
+#
+# What leaves with it, all intended:
+#   · the `settings.section` entry with id `models`;
+#   · the `welcome-notice` onboarding row;
+#   · the DeepSeek onboarding dialog — which configures the `llm-deepseek`
+#     namespace, whose provider row this bundle already disables above, so it was
+#     inert here regardless.
+- id: ui-settings-models
+  disabled: true
+
+# ── brand: qialike's mark, wordmark and hero mark ───────────────────────────
+#
+# Three `single` seats, all served by one client bundle: the sidebar's mark and
+# wordmark, and the mark above the conversation hero. The hero seat is `single`,
+# `root` and ships **empty**, so filling it replaces nothing — the hero's
+# animated-fish fallback stays the fallback.
+#
+# The row exists for exactly one reason, and it is easy to miss: a client bundle
+# reaches the browser only through a *mounted Loader row*, because the
+# client-module scanner walks the host Loader's entries and reads the manifests
+# they name. A package that declares `dsh.client` but is never mounted is
+# discovered by nothing, so branding that is purely a browser concern still needs
+# a host row to hang from.
+- insert:
+    - id: qialike-brand
+      name: '@qialike/qialike-desktop-brand'
+
+# ── brand: occupy the sidebar slots the official occupant fills ─────────────
+#
+# `sidebar.brand.mark` and `sidebar.brand.name` are `single` slots, so exactly
+# one occupant may register for each. The upstream occupant
+# (@deepseek-ai/dsh-client-ui-brand-official) only registers when the client
+# bundle was built with DSH_CLIENT_BUILD_PROFILE=official, which makes disabling
+# it here idempotent on a checkout built for another profile — and decisive on
+# the official artifacts desktop actually ships.
+#
+# Disabling the row rather than relying on registration order is deliberate: two
+# `single`-slot registrations are a conflict the client reports at runtime, not
+# something the slot registry resolves by precedence.
+- id: ui-brand-official
+  disabled: true
+
+# ── account: keep the DeepSeek account surface out of this product ───────────
+#
+# `@deepseek-ai/dsh-client-ui-settings-account` opens with
+# `if (!('dshDesktop' in globalThis)) return`, so it is inert in a browser tab and
+# mounts only once the shell marks itself as a desktop application. Our preload
+# sets that marker deliberately — it is the only way to stop `ui-settings-models`
+# from registering the DeepSeek credential-onboarding dialog and the welcome
+# notice — so disabling this row is what keeps the marker from also pulling in an
+# account section, an account launcher menu and a desktop onboarding overlay for
+# an account product qialike does not use.
+#
+# Disabling the row rather than leaving the plugin unmounted by absence: the row
+# is what mounts it, and `account-controller` below stays (the Host still answers
+# `remote.account`; nothing in this profile reads it).
+#
+# Consequences, all intended:
+#   · `settings.section` loses its `account` entry — the nav shows the remaining
+#     sections.
+#   · `settings.launcher` and `settings.models.sign-in` keep no occupant;
+#     `DeepSeekOnboardingDialog` renders its own editor through the seat's
+#     documented `fallback`, so the models page is unaffected.
+- id: ui-settings-account
+  disabled: true
+
+# 0.2.2-rc.3 SPLIT THE ACCOUNT SURFACE IN TWO and only the first half was excluded, so the desktop
+# posture kept showing an account surface it is supposed to have none of. The row is new, the reason
+# is not: this application's preload sets `dshDesktop`, `ui-settings-account` returns early on that
+# marker, and the notification surface is the same family — an account menu and its overlay that the
+# desktop shell replaces with its own.
+- id: ui-account-notifications
+  disabled: true
+
+# ── voice: continuous dictation, one sentence at a time ──────────────────────
+#
+# The harness's own voice-input plugin records ONE clip and transcribes it when the user
+# presses Stop; its `stop()` is the only path to `transcribe()`, so "one sentence, one
+# transcription" is not a setting there — it is absent structurally.
+#
+# This row adds a second control that owns its own microphone: the level is watched frame by
+# frame, a stretch that ends in a pause becomes one canonical WAV, and each is transcribed and
+# inserted into the draft while recording continues. The transcription itself is the speech
+# Remote the `voice-input` bundle serves, so this row carries no model and no download of its
+# own — it is inert until that bundle is enabled, and the control appears at that moment
+# because the client half injects `remote.speech` rather than assuming it.
+#
+# IT STANDS BESIDE THE SHIPPED MICROPHONE RATHER THAN REPLACING IT. `conversation.input.activity`
+# is a `single` slot and the harness plugin occupies it, so a control that pressed Stop on the
+# user's behalf would have to take that slot and reimplement the whole recording UI. Registering
+# into the LIST slot `conversation.input.right` instead adds a cell and keeps the shipped
+# push-to-talk for users who prefer it.
+- insert:
+    - id: qialike-voice
+      name: '@qialike/qialike-desktop-voice'
+
+# ── export: a Session as JSON or Markdown, from its own menu ────────────────
+#
+# The harness ships `/export` and a header button, and both hand back the raw `.jsonl` inside a
+# ZIP — a backup of the log, not a document. This row adds the CLI's `/export` instead: a JSON
+# file or a Markdown file, written into the Session's workspace, chosen from the row's menu
+# beside "Copy Session ID".
+#
+# WHY A ROW OF ITS OWN. It owns a Host route (`/api/qialike/export`) that reads the Session
+# through `sessionQuery` — the harness's cold-safe reader, so a live Session is exported whole
+# rather than truncated at its last write — and folds it into a document. Folding and rendering
+# are here rather than reused from the CLI because the CLI's implementation imports Ink at the
+# top of the module and cannot be loaded by anything that is not a terminal.
+- insert:
+    - id: qialike-export
+      name: '@qialike/qialike-desktop-export'

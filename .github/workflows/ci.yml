@@ -1,0 +1,86 @@
+# Continuous integration for qialike desktop.
+#
+# WHAT THIS GATE IS, AND WHAT IT IS NOT. The application is composed from two read-only upstream
+# checkouts — deepseek-harness and the qialike CLI — and the full suite includes suites that read
+# them, or read files the build generates from them. Reproducing that on every pull request means
+# cloning and building both, which costs far more than most changes warrant.
+#
+# So this workflow runs everything a fresh clone can answer on its own: the type check, and the
+# subset of the suite that neither checkout can change (`pnpm run test:hygiene`, whose exclusions and
+# their reasons live in `vitest.hygiene.config.mjs`). It is the same command a contributor can run
+# locally, so CI cannot drift into checking something nobody else can reproduce.
+#
+# WHAT IT THEREFORE DOES NOT PROVE. Patch anchors against a new harness, theme tokens against the
+# CLI's palettes, the farm copy, the assembled runtime tree, or anything that needs a packaged
+# artifact. Those are release checks in the maintainers' workspace, documented in CONTRIBUTING.md.
+# A green run here is "this change is internally consistent", not "this release is shippable".
+#
+# RAISING THE COST LATER. If the upstream-facing half becomes worth running per pull request, add it
+# as a second job that clones both checkouts and runs `pnpm run build`, then `pnpm test` — do not
+# widen this job, whose value is that it finishes while the reviewer is still looking at the diff.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A superseded push to the same branch has nothing to say about the new one. Cancelling is safe here
+# because no step publishes anything.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hygiene:
+    name: Typecheck and the hermetic suite
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Enable pnpm
+        run: corepack enable
+
+      # Read the version out of `package.json` rather than repeating it. `packageManager` is the
+      # normative field — Corepack reads it — so a bump moves the workflow with it instead of
+      # leaving two copies of one fact to drift apart.
+      - name: Activate pnpm from package.json
+        run: corepack prepare "$(node -p 'require("./package.json").packageManager')" --activate
+
+      # The store is pinned inside the checkout by `storeDir` in pnpm-workspace.yaml, so the cache
+      # path is the repository-relative one rather than pnpm's global default.
+      - name: Cache the pnpm store
+        uses: actions/cache@v4
+        with:
+          path: .pnpm-store
+          key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # Several suites import compiled `lib/` output, so this must precede the tests. It needs
+      # neither upstream checkout; the generated client bundles and hand-written policy files are
+      # committed for exactly that reason.
+      - name: Compile the workspace
+        run: pnpm run build:packages
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Hermetic test suite
+        run: pnpm run test:hygiene
+
+      # `build:packages` writes gitignored output. If a source change made that output tracked, or
+      # a step rewrote a tracked file, the diff is the only place it shows up.
+      - name: Assert the checks did not rewrite tracked files
+        run: git diff --exit-code

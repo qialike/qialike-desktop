@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Entitlements for the macOS build's hardened runtime.
+
+  Every entry here exists because the application does something the hardened
+  runtime forbids by default, and each is justified by where the need comes from —
+  an entitlement added "because it made the build work" is a hole nobody can
+  review later.
+
+  HOW THE APPLICATION IS SHAPED, since the list follows from it. One signed
+  Electron bundle contains the window; the *Host* is that same Electron binary
+  re-executed as a plain Node process, which loads the runtime tree at
+  `resources/dsh` — a pnpm workspace holding a few hundred packages and a handful
+  of Node-API `.node` binaries. So the entitlements have to cover both a Chromium
+  renderer and a Node child process that loads code the signer never saw.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!--
+    The runtime tree's native modules (`system.node`, and `koffi` on the Windows
+    path) are Node-API binaries loaded at run time from a directory that is not
+    part of the signed bundle's own code. Without this, library validation refuses
+    them and the Host cannot start — the session store's file lock and the shell
+    executor are both reached through such a module.
+  -->
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
+
+  <!--
+    V8 compiles JavaScript to executable memory at run time. Both the renderer and
+    the Host need it; the hardened runtime requires it to be declared.
+  -->
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+
+  <!--
+    V8 also allocates writable-executable pages that are not produced by the JIT
+    path above. Chromium's own signed build carries this entitlement for the same
+    reason.
+  -->
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+
+  <!--
+    The Host is spawned with `ELECTRON_RUN_AS_NODE=1` in its environment, which is
+    how one binary becomes two. Stripping DYLD environment variables would leave
+    the child unable to switch modes.
+  -->
+  <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+  <true/>
+</dict>
+</plist>

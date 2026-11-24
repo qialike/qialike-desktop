@@ -1,0 +1,132 @@
+name: Bug report
+description: Something does not work the way the user guide says it should.
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Do not report a security vulnerability here.** This issue is public the moment you submit
+        it. See [SECURITY.md](https://github.com/qialike/qialike-desktop/blob/main/SECURITY.md) for
+        the private channel — sandbox escapes, approval bypasses, credential leaks and plugin-trust
+        problems all belong there.
+
+  - type: markdown
+    attributes:
+      value: |
+        The version, the platform and the sandbox rung are the three facts asked for most often, so
+        they are required. Everything else helps a fix land in one round instead of five.
+
+  - type: input
+    id: version
+    attributes:
+      label: qialike desktop version
+      description: |
+        The version shown in the About panel — **Help → About** on Linux and Windows, the application
+        menu on macOS. If you built from source, say so and give the commit instead. If the window
+        will not start, the artifact filename is enough.
+      placeholder: 0.8.1
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      description: Only Linux x86-64 is a supported release target today.
+      options:
+        - Linux x86-64 (AppImage)
+        - Linux x86-64 (deb)
+        - Linux arm64
+        - macOS
+        - Windows
+        - Built from source — say which platform below
+        - Other — say which below
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: OS and desktop
+      description: The distribution release and the desktop environment or window manager.
+      placeholder: Ubuntu 24.04, GNOME 46 (Wayland)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: How it was installed
+      options:
+        - AppImage
+        - Debian package (deb)
+        - Built from source
+        - Updated from an older version
+        - Other — say which below
+    validations:
+      required: true
+
+  - type: dropdown
+    id: sandbox
+    attributes:
+      label: Sandbox rung in force
+      description: |
+        Which confinement was active for the session. A bug in `danger-full-access` is not the same
+        bug as one under `workspace-write`, so this is worth getting right.
+      options:
+        - bubblewrap (Linux)
+        - Landlock (Linux, embedded launcher)
+        - Seatbelt (macOS)
+        - Windows ACL restricted token
+        - danger-full-access (opted out of confinement)
+        - SANDBOX_UNAVAILABLE / not sure
+        - Not applicable (no shell command involved)
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you expected, and what happened instead. If the screen is the evidence, say what was on it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Smallest reproduction
+      description: |
+        The shortest set of steps that still shows the problem — what you clicked or typed, which
+        file or workspace was open, and which model or provider was selected if it matters.
+      placeholder: |
+        1. Open a session in a workspace containing …
+        2. Ask the agent to …
+        3. Open the right sidebar and …
+        4. See …
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant output
+      description: |
+        Run the application from a terminal to see its standard output, and paste only the lines
+        around the failure. If the backend died, a crash report was written to the directory the
+        dialog named — on Linux, `~/.config/@qialike/desktop/crashes/`; attach the newest one if it
+        is small.
+
+        **Read the output before you paste it** — it can contain file paths and fragments of your
+        conversation.
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Screenshots or a recording help for anything visual. A recording beats a still.
+    validations:
+      required: false

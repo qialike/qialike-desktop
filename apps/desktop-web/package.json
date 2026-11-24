@@ -1,0 +1,11 @@
+{
+  "name": "@qialike/desktop-web",
+  "description": "qialike's browser surface assets: the brand files the build shadows over the harness Web dist, and (in M2's second half) this repository's own frontend",
+  "version": "0.9.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "files": [
+    "public"
+  ]
+}

@@ -1,0 +1,35 @@
+# Normalise line endings in the repository. Every shell script and TypeScript source is written with
+# LF, and a Windows checkout must not rewrite them with CRLF — a bash script with CRLF fails with
+# `\r: command not found`, which is a confusing first failure for the platform this project also
+# builds for.
+* text=auto eol=lf
+
+# Images and fonts are bytes, not text: never diff them, never convert their endings.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.icns binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.pdf binary
+
+# Installers and executables produced by a local package run, if one is ever staged inside the tree.
+*.AppImage binary
+*.exe binary
+*.dll binary
+*.dylib binary
+
+# ---------------------------------------------------------------------------
+# Source-release filters — `git archive` honours `export-ignore`.
+#
+# The files below are development-only: CI configuration, screenshots of an experiment, and a
+# scratch tree. They stay in the repository (they are how changes are reviewed and verified) but
+# they are not part of a source archive, which is for someone who wants to build the application.
+# ---------------------------------------------------------------------------
+/.github/ export-ignore
+/.preview/ export-ignore
+/.build-scratch/ export-ignore

@@ -1,0 +1,67 @@
+packages:
+  - 'packages/*'
+  - 'apps/*'
+
+autoInstallPeers: false
+
+# esbuild arrives transitively through vitest; its postinstall fetches the
+# platform binary, and without the approval the test runner cannot start.
+#
+# electron's postinstall is what materialises `electron/dist/` and `path.txt`.
+# Without the approval pnpm 11 skips it SILENTLY — no warning, no error — and
+# `require('electron')` then has no binary to point at. Added while bringing the
+# build up on Windows, where that surfaced; the approval is needed on every host,
+# it had simply never been exercised off the machine that built Linux.
+allowBuilds:
+  esbuild: true
+  electron: true
+
+# Make the Windows installer decompress its payload once, not twice.
+#
+# WHY THIS EXISTS. `app-builder-lib`'s NSIS template extracts the application
+# archive into `$PLUGINSDIR\7z-out` and then copies the whole tree to the install
+# directory with `CopyFiles`, so every one of the payload's files is written
+# twice. On this application's 25,838-file payload the second write alone costs
+# 237 s of a 582 s install; the decompression it duplicates costs 78 s.
+#
+# WHY A PATCH RATHER THAN A SUPPORTED OPTION. Both documented hooks were tried and
+# neither can reach this macro:
+#
+#   · `nsis.script` replaces `installer.nsi`, and taking that branch makes
+#     `NsisTarget.computeScriptAndSignUninstaller` return before it sets
+#     `UNINSTALLER_OUT_FILE` (it is only assigned on the default path, which is
+#     also the path that builds and signs the uninstaller). The shipped template
+#     then fails to compile: `include/installer.nsh` embeds that file, so the
+#     installer cannot be produced at all.
+#   · `nsis.include` is emitted into the *header*, ahead of the script body, and
+#     `extractUsing7za` is defined later — inside `installSection.nsh`, which the
+#     body includes. NSIS resolves `!insertmacro` at its point of use, so a
+#     definition in the header is shadowed by the later one rather than
+#     overriding it. Redefining the name is not an option either: NSIS aborts with
+#     `macro named "…" already exists!`.
+#
+# So the macro itself is edited. `patches/app-builder-lib@26.15.3.patch` carries
+# the change and the reasoning; `docs/desktop/windows-install-performance.md`
+# carries the measurements, including the two alternatives that were built and
+# timed (a `useZip` build, which costs 41.5 MB of installer and the block map the
+# updater needs, and a custom `installer.nsi`, which cannot work as above).
+patchedDependencies:
+  app-builder-lib@26.15.3: patches/app-builder-lib@26.15.3.patch
+
+# Pin the content-addressable store inside the checkout.
+#
+# The default is `~/.local/share/pnpm/store`, which is unusable wherever writes
+# outside the project are not permitted — including the confined environment this
+# project is developed in. That failure is worth pinning away rather than
+# documenting, because it does not present as a permissions error: pnpm's own
+# dependency-status check runs `pnpm install` before any script, so a bare
+# `pnpm test` dies in `ERR_SQLITE_ERROR: unable to open database file` before
+# vitest starts. `--store-dir` fixes a direct `pnpm install` but not that implicit
+# one, and for it pnpm 11 honours neither `.npmrc` nor `npm_config_store_dir` —
+# only `storeDir` here.
+#
+# Relative on purpose: it resolves against this file, so the path is not tied to
+# one machine, and it is gitignored. Delete the line to share the global store
+# again; nothing in the build depends on it, because `build.mjs` passes its own
+# `--store-dir` (or `QIALIKE_PNPM_STORE`) for the runtime tree.
+storeDir: .pnpm-store

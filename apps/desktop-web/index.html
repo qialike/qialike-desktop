@@ -1,0 +1,54 @@
+<!doctype html>
+<!--
+  This application's own document, rendered into the Web dist by the build.
+
+  WHY WE OWN IT RATHER THAN EDITING UPSTREAM'S. Editing in place meant string-replacing
+  `<title>` in someone else's document and hoping the rest stayed put — and the element we
+  replaced existed only because upstream's build wrote it, so the edit was coupled to a
+  string we did not control. This document states our half (the title, the icons, the
+  manifest, the language) and takes upstream's half as a substitution, which makes the seam
+  explicit and checkable instead of a regex over markup we do not own.
+
+  THE TWO MARKERS, AND WHY THERE ARE ONLY TWO.
+
+    dsh:assets   replaced by the harness's own `<script>`/`<link>` references into
+                 ./assets/, lifted verbatim from the built Web dist's index.html. This is
+                 the whole reason the document can be ours at all: those filenames are
+                 CONTENT-HASHED and change on every upstream rebuild, so hardcoding them
+                 here would break the application on an upstream update in a way nothing
+                 local can observe — the window would simply fail to paint. The build reads
+                 them out of the dist every time, and fails if the block it finds is empty
+                 or carries no module script.
+    dsh:title    replaced by the product name read from the shell's `paths.ts`, so the
+                 document title, the window title and the About box cannot disagree.
+
+  Nothing else is templated. Everything below is the document as it should be, and a
+  reviewer can read it as HTML rather than as a string in a build script.
+
+  NO LITERAL TAGS IN THIS COMMENT, and the reason is a real bug rather than style. The build
+  splices the application stylesheet in before the HEAD'S CLOSING TAG by replacing its first
+  occurrence in the document — and a comment that spells that tag out wins the race. The
+  stylesheet was then injected into the middle of this prose: the comment was closed early by
+  its own text and the rest of the document spilled out as markup. The build now refuses a
+  document with more than one occurrence, so writing it out again fails loudly instead of
+  quietly producing a broken page.
+
+  The application stylesheet is NOT here: the build splices it in immediately before the
+  head closes, i.e. after the upstream stylesheets, because equal specificity resolves by
+  document order and a stylesheet placed before them would silently lose every conflict.
+  See `apps/desktop-web/public/qialike-ui.css` for the full cascade reasoning.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!--dsh:assets-->
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" type="image/svg+xml" href="./favicon-dark.svg" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" media="(prefers-color-scheme: light)" />
+    <title><!--dsh:title--></title>
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

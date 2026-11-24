@@ -1,0 +1,46 @@
+{
+  "name": "@qialike/desktop-root",
+  "description": "The qialike desktop application: the deepseek-harness browser surface in an Electron shell, with qialike's branding, providers, themes and policy",
+  "version": "0.9.0",
+  "private": true,
+  "license": "MIT",
+  "author": "qialike contributors",
+  "homepage": "https://github.com/qialike/qialike-desktop#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/qialike/qialike-desktop.git"
+  },
+  "bugs": {
+    "url": "https://github.com/qialike/qialike-desktop/issues"
+  },
+  "type": "module",
+  "packageManager": "pnpm@11.28.5",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "generate": "node apps/desktop-bin/build.mjs --generate-only",
+    "build": "node apps/desktop-bin/build.mjs",
+    "build:packages": "tsc -b packages/qialike-desktop-app packages/qialike-desktop-providers packages/qialike-desktop-brand apps/desktop-host apps/desktop",
+    "gates": "node apps/desktop-bin/gates/run-all.mjs",
+    "start:desktop": "node apps/desktop-bin/start.mjs",
+    "test": "vitest run",
+    "test:hygiene": "vitest run --config vitest.hygiene.config.mjs",
+    "test:boot": "vitest run tests/profile-boot.test.mjs",
+    "typecheck": "node apps/desktop-bin/typecheck.mjs",
+    "package:linux": "node apps/desktop-bin/package.mjs --target linux",
+    "package:mac": "node apps/desktop-bin/package.mjs --target mac",
+    "package:win": "node apps/desktop-bin/package.mjs --target win"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "electron-builder": "^26.15.3",
+    "semver": "^7.7.1",
+    "typescript": "^6.0.3",
+    "vitest": "^3.2.4"
+  }
+}

@@ -1,0 +1,93 @@
+# Build outputs. The farm is a derived tree — never edit it, never commit it.
+/dist/
+/.farm/
+# Not `/node_modules/`: that anchors to the repository root, and pnpm also creates
+# per-member link directories (`apps/desktop/node_modules/electron`,
+# `packages/*/node_modules/@qialike/*`). Committing those would be worse than
+# redundant — several are symlinks into `.pnpm-store`, which is itself ignored, so a
+# fresh checkout would get dangling links that `pnpm install` then has to replace.
+node_modules/
+/.build-scratch/
+
+# The pnpm content-addressable store, pinned to a workspace-relative path by
+# `storeDir` in pnpm-workspace.yaml. Never committed; see that file for why.
+/.pnpm-store/
+
+# `pnpm patch --edit-dir <dir>` writes its working copy beside the directory it was
+# given and does not always clear it afterwards, so a checkout ends up holding a
+# second copy of a dependency. Both spellings are scratch: the artifact that matters
+# is the committed file under `patches/`, which is what `pnpm install` applies.
+/.patch-edit/
+/.patch-edit_tmp/
+
+# Local overrides for where the two read-only upstream checkouts live.
+.env.local
+
+# Compiled TypeScript. `pnpm run build:packages` produces it, and the build order in
+# README.md runs that step before assembling the runtime tree, so a fresh checkout
+# regenerates it. Committing it would mean every source edit produced a matching
+# diff in generated code, and a rebuild churned files nobody had changed.
+#
+# These are per-directory rather than a blanket `lib/`, because `lib/` is *mixed*:
+# the client bundles in `packages/*/lib/client.js` are hand-written — the harness's
+# client build tooling is unpublished, so there is nothing to generate them with —
+# and they sit beside compiled siblings. A blanket rule would delete the client.
+/apps/desktop/lib/
+/apps/desktop-host/lib/
+/packages/*/lib/*
+!/packages/*/lib/client.js
+# The policy row's entry point is hand-written for the same reason the client
+# bundles are: nothing compiles it, so committing it is what makes the package exist
+# in a fresh checkout. Its two siblings in this directory are the opposite —
+# generated from the CLI's sources by `cli-policy.mjs` — and stay ignored, which is
+# why this exception names one file rather than the directory.
+!/packages/qialike-desktop-policy/lib/index.js
+# Same split again in the theme package: `palettes.js` is generated from the CLI's
+# sources, while the token mapping, the row and the picker are hand-written.
+!/packages/qialike-desktop-theme/lib/index.js
+!/packages/qialike-desktop-theme/lib/client.js
+!/packages/qialike-desktop-theme/lib/tokens.js
+# The edit-follow package, where the split disappears: nothing here is generated, so
+# every file needs an exception. `client.js` comes from the blanket rule above; the row
+# and its storage rules are these two. A missed exception is invisible in the worst way
+# -- the file is on disk, the suite passes, the build finds it -- and only a fresh
+# checkout shows it, as a package whose `main` points at nothing. That is not a
+# hypothetical: these two lines were missing when the package was added, and the only
+# thing that noticed was `tests/handwritten-files.test.mjs`, which exists because of it.
+!/packages/qialike-desktop-edit-follow/lib/index.js
+!/packages/qialike-desktop-edit-follow/lib/settings.js
+# The office-engine package, where the split disappears for the same reason: one module, nothing
+# generated, so it needs its own exception and would be missing from a fresh checkout without it.
+# The package is deliberately shaped that way -- the whole installer is one file importing nothing
+# from the harness, which is what lets `tests/office-engine-install.test.mjs` reach it at all.
+!/packages/qialike-desktop-office-engine/lib/index.js
+!/packages/qialike-desktop-office-engine/lib/install.js
+# `diagnose.js` joined them in 0.4.7 for the same reason and one of its own: it is hand-written, and it
+# is also loaded outside the runtime tree — by `tests/office-engine-runtime.test.mjs`, which is where
+# the probe's three outcomes are pinned. A fresh checkout missing it would fail that suite with a
+# module-not-found rather than with the assertion the suite exists to make.
+!/packages/qialike-desktop-office-engine/lib/diagnose.js
+
+# The update package is the same shape as the office-engine one: a hand-written client half and a
+# hand-written host half, no build step, so both files are sources rather than artifacts. `lib/client.js`
+# is the entry the runtime is served through (`exports['./client']`), which is why losing it from the
+# repository would not fail a build — it would fail at the moment a user opened Settings.
+!/packages/qialike-desktop-update/lib/index.js
+!/packages/qialike-desktop-update/lib/client.js
+
+# The voice row's host half is a bare `apply()` marker (the feature is browser behavior), and
+# `lib/client.js` is covered by the blanket exception at the top of this file.
+!/packages/qialike-desktop-voice/lib/index.js
+
+# The export row is the same shape: a hand-written host half that nothing generates, and a
+# `lib/client.js` covered by the blanket exception at the top of this file.
+!/packages/qialike-desktop-export/lib/index.js
+
+# TypeScript's incremental-build state. Pure cache: it records file hashes and emits
+# absolute paths from the machine that produced it, so it is noise at best in a
+# repository and misleading at worst.
+*.tsbuildinfo
+
+# Comparison previews generated while choosing the moss background. Kept out of the
+# repository: they are screenshots of an experiment, not product assets.
+/.preview/

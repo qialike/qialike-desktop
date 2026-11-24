@@ -1,0 +1,22 @@
+{
+  "name": "@qialike/desktop",
+  "description": "The qialike desktop application: the deepseek-harness browser surface in an Electron window",
+  "version": "0.9.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "main": "lib/main.js",
+  "scripts": {
+    "build": "tsc -b",
+    "watch": "tsc -b --watch",
+    "start": "electron ."
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  },
+  "devDependencies": {
+    "electron": "44.0.0"
+  },
+  "author": "qialike contributors",
+  "homepage": "https://github.com/qialike/qialike-desktop"
+}

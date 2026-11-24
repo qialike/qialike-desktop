@@ -1,0 +1,16 @@
+{
+  "name": "@qialike/qialike-desktop-host",
+  "description": "Private Node-mode Host process for the qialike desktop application: boots the qialike-desktop profile and reports its authenticated URL to the shell",
+  "version": "0.9.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "main": "lib/index.js",
+  "files": [
+    "lib/index.js"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "watch": "tsc -b --watch"
+  }
+}

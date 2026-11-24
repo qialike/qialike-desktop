@@ -1,0 +1,66 @@
+name: Feature request
+description: Suggest a capability, or a change to how something behaves.
+labels: ['enhancement']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This application is a layer over the DeepSeek Harness browser surface: it adds branding, the
+        provider catalogue, colour schemes and policy rather than replacing the harness's own UI. A
+        request that fits that shape is more likely to be accepted than one that needs the harness
+        forked. See [CONTRIBUTING.md](https://github.com/qialike/qialike-desktop/blob/main/CONTRIBUTING.md).
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do that you cannot do today? Describe the situation rather than the solution — it often has a better answer than the one either of us started with.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like
+      description: Your suggested behaviour, if you have one. Concrete input and output beats a description of a feature.
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you tried instead
+      description: Another tool, a workaround, a different provider or a CLI command. Knowing the workaround tells us how much the gap actually costs you.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Which surface
+      description: This application runs the harness's browser surface inside an Electron shell; some requests belong upstream instead.
+      options:
+        - The window, menus or application shell
+        - The conversation or composer
+        - The right sidebar (file tree, preview, terminal)
+        - Follow edited files
+        - Providers, models or API keys
+        - Sandbox, approvals or permissions
+        - Colour schemes or language
+        - Office documents, PDF or spreadsheet preview
+        - Updates or installation
+        - Build or release tooling
+        - The agent's behaviour or tools (may belong upstream)
+        - Not sure
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched the existing issues and this is not already reported.
+          required: true
+        - label: This is not a security issue (those go to SECURITY.md, never a public issue).
+          required: true

@@ -1,0 +1,33 @@
+{
+  "name": "@qialike/qialike-desktop-office-engine",
+  "description": "Install the LibreOffice engine on demand instead of shipping it in every package",
+  "version": "0.9.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./install": {
+      "default": "./lib/install.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/*.js"
+  ],
+  "dsh": {
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-locale"
+      ],
+      "platform": "web"
+    }
+  }
+}

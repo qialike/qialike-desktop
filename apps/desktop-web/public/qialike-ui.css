@@ -1,0 +1,269 @@
+/*
+ * NOT A SCRIPT — this file is CSS. It is inlined verbatim into the served
+ * `index.html` by `apps/desktop-bin/lib/web-shadow.mjs`, inside
+ * `<style id="qialike-ui">`, immediately before `</head>`.
+ *
+ * WHY THIS FILE EXISTS RATHER THAN A STRING IN THE BUILD SCRIPT. The build has to
+ * inject *something*; keeping it as a real file means the styling is reviewable as
+ * styling — a diff shows rules, not an escaped string inside JavaScript. The build
+ * only reads it and checks it is not empty.
+ *
+ * WHY IT IS INLINED RATHER THAN SERVED. The shell serves the static documents it
+ * knows by name plus everything under `/assets/` (`isStaticDocument` in
+ * `apps/desktop/src/web-document.ts`). A stylesheet at `/qialike-ui.css` would be a
+ * 404 through the Host proxy — the same trap the `/brand/` wordmarks hit in M2.
+ * Inlining sidesteps the whitelist entirely, and costs one round trip less.
+ *
+ * WHERE IT LANDS IN THE CASCADE, AND WHY THAT MATTERS MORE THAN IT LOOKS. The
+ * injection point is immediately before `</head>`, i.e. *after* the upstream
+ * `<link rel="stylesheet">` elements. That is deliberate and load-bearing: CSS
+ * resolves equal specificity by document order, and the upstream palette is
+ * declared on `:root` — so a stylesheet placed *before* those links would lose
+ * every conflict to them and the overrides below would silently do nothing. There
+ * is no error for that; the application would simply look upstream, which is the
+ * hardest kind of bug to attribute.
+ */
+
+/*
+ * ── Typefaces ───────────────────────────────────────────────────────────────
+ *
+ * WHY SELF-HOSTED. The upstream stack begins with `-apple-system,
+ * BlinkMacSystemFont, "Segoe UI"`, which resolves on macOS and Windows and
+ * resolves to NOTHING on Linux — where the whole stack then falls through to
+ * whatever fontconfig substitutes, so the same build renders in a different
+ * typeface per distribution. Bundling makes the product's text identical
+ * everywhere, which is the point of bundling anything.
+ *
+ * WHY VARIABLE FILES. One `InterVariable.woff2` covers weights 100-900; the static
+ * set would be seven files for the same coverage. JetBrains Mono's variable file
+ * does the same. The three faces below total 826 KB, against a runtime tree of
+ * 506 MB — the size argument that would matter for a website does not apply to a
+ * desktop package that already ships a Node runtime.
+ *
+ * `font-display: swap` rather than `block`: these are local files, so the swap is
+ * a frame or two, whereas `block` risks invisible text for up to three seconds if
+ * anything ever goes wrong with the request. Trading a possible flicker for a
+ * possible blank page is the right direction.
+ *
+ * LICENSING. Both families are SIL Open Font License 1.1, and neither declares a
+ * Reserved Font Name — the copyright lines carry no `with Reserved Font Name`
+ * clause — so redistributing them and naming the families as below is permitted.
+ * `LICENSE-Inter.txt` and `LICENSE-JetBrainsMono.txt` sit beside the fonts and are
+ * shipped with them; the OFL requires the licence to travel with the files.
+ */
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  /* The variable axis, so one file serves every weight the UI asks for. */
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('./assets/fonts/InterVariable.woff2') format('woff2-variations');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('./assets/fonts/InterVariable-Italic.woff2') format('woff2-variations');
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url('./assets/fonts/JetBrainsMono-var.woff2') format('woff2-variations');
+}
+
+/*
+ * ── Font stacks ─────────────────────────────────────────────────────────────
+ *
+ * Applied by overriding the TOKENS, not by restyling `body`. The upstream surface
+ * is token-driven — `var(--dsw-font-family)` appears 34 times and the markdown
+ * scale derives from it — so setting the token reaches every consumer at once,
+ * including ones added upstream later. A `body { font-family }` rule would reach
+ * only what does not already name a token, which is the minority.
+ *
+ * THE SELECTOR IS DOUBLED, AND THAT IS NOT A TYPO. Upstream declares
+ * `--dsw-font-family` in `ui-theme`'s `base.css`, which the client bundle injects as
+ * a `<style>` element **at runtime** — it appears in the document *after* this one,
+ * because this one is in the markup and that one arrives once the bundle executes.
+ * Document order therefore favours upstream, and a plain `:root` rule loses: measured
+ * on a running application, the token still resolved to `-apple-system, …` while
+ * `--dsw-font-mono` (which upstream never defines) resolved to the bundled face.
+ * `:root:root` has specificity (0,2,0) against upstream's (0,1,0), so it wins wherever
+ * it sits in the cascade.
+ *
+ * The alternative was `!important`, which would work and is worse: it cannot be
+ * overridden by anything later, including a future theme that wants to set the
+ * family, whereas a specificity beat can still be beaten by a more specific rule.
+ * (It is also why the file's header, which explains the position before `</head>`,
+ * is about ordering for the *token overrides* rather than for these two: the
+ * position still matters for the theme row, and no longer decides these.)
+ *
+ * INTER FIRST, THEN THE ORIGINAL STACK INTACT. Two consequences, both intended:
+ *
+ *   · **Inter now wins on macOS and Windows too**, where `-apple-system` and
+ *     `Segoe UI` used to. That is a deliberate product decision — one typeface
+ *     everywhere — and it is the visible cost of this file. Deleting `Inter,` from
+ *     the front restores per-platform fonts and keeps the Linux fix.
+ *   · **THE CJK FACES ARE KEPT**, and must be: Inter contains no CJK glyphs, so
+ *     Chinese text falls through to `PingFang SC` / `Hiragino Sans GB` /
+ *     `Microsoft YaHei` exactly as before. Removing them would send every Chinese
+ *     glyph to `Arial` and its fontconfig substitute, which on a Linux desktop is
+ *     often a worse Chinese face than the ones named. They stay ahead of `Arial`
+ *     for that reason.
+ */
+:root:root {
+  --dsw-font-family:
+    'Inter',
+    -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
+    'Helvetica Neue', Helvetica, Arial, sans-serif;
+
+  /*
+   * `--dsw-font-mono` is CONSUMED BUT NEVER DEFINED upstream: six sites read
+   * `var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace)`, so
+   * they take the fallback today. Defining it here is therefore a fix rather than
+   * an override — those six sites start using the bundled face instead of
+   * whatever `ui-monospace` means on the host.
+   */
+  --dsw-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /*
+   * A second, differently-named mono token (`--ds-` rather than `--dsw-`) that 14
+   * sites read. It already lists `JetBrains Mono` — but second, behind `"SF Mono"`,
+   * which is why it never resolves on Linux. Re-declaring it with the bundled face
+   * first is what makes those 14 sites use it.
+   */
+  --ds-font-family-code:
+    'JetBrains Mono', 'SF Mono', 'Fira Code', Consolas,
+    'Liberation Mono', Menlo, Courier, 'PingFang SC', 'Microsoft YaHei';
+}
+
+/*
+ * ── The boot card's wordmark ────────────────────────────────────────────────
+ *
+ * The harness draws its own boot card — a wordmark, a spinner, and "Loading
+ * plugins…" — and the wordmark's text is a product name of the harness's own,
+ * baked into the Web dist's bundle. It sits in the middle of the window for a
+ * second
+ * while the Host boots, and it is the only place the product introduces itself
+ * under someone else's name. Everything else that greets the user already says
+ * qialike: the shell's own loading page, the window title, the sidebar.
+ *
+ * THE TEXT IS A TEXT NODE, so no declaration can restyle it into another string.
+ * It is hidden by collapsing the element's font-size to zero and re-drawn as
+ * `content` on `::after` — the only mechanism CSS has for replacing text.
+ *
+ * WHY `font-size: 0` DOES NOT COLLAPSE THE CARD. Upstream declares
+ * `line-height: 24px` on the same rule as `font-size: 16px`, so the box keeps its
+ * height whatever the font-size becomes. The typography is re-declared on
+ * `::after` rather than left to inherit, and the reason is specific:
+ * `letter-spacing: .08em` is inherited as a COMPUTED length. The element computes
+ * that `em` against the font-size we just zeroed, so inheritance would silently
+ * yield 0 and render the word a little tighter than upstream's — a difference
+ * small enough to ship unnoticed.
+ *
+ * WHY A SUBSTRING SELECTOR IS ACCEPTABLE HERE, having been rejected below. The
+ * rejection stands for component classes in general: `_selected` and `_hoverTitle`
+ * are ordinary English and their substrings appear in unrelated components. This
+ * selector is safe for three reasons, each checked rather than assumed. `wordmark`
+ * occurs in exactly ONE class in the whole upstream stylesheet
+ * (`._wordmark_u7vgf_31`; the bundle's other `wordmark` names are SVG clip-path
+ * ids for the logo, not classes). It is scoped inside `[data-dsh-boot]`, a stable
+ * data attribute upstream sets on the boot root and nowhere else. And that subtree
+ * is a fixed three elements. So the content hash — the one part of the class name
+ * that cannot be written down — is the only part this selector does not use.
+ *
+ * WHAT THIS DOES NOT DO. The hint still reads "Loading plugins…": that is
+ * upstream's wording and it is accurate, so only the wordmark was changed. A
+ * screen reader may still announce the hidden text node, because collapsing a
+ * font-size does not remove text from the accessibility tree. That is left as-is
+ * rather than grown into a script: the card lives about a second, upstream gives it
+ * no ARIA of its own, and a script would have to race the card's insertion and
+ * could lose, showing the upstream wordmark first and then correcting it.
+ *
+ * THE UPSTREAM WORDMARK IS NOT SPELLED ANYWHERE IN THIS FILE, deliberately. This
+ * stylesheet is inlined into every served document, and the test below asserts that
+ * document carries no upstream branding — so writing the string here to explain
+ * that we are removing it would put it back. The name lives in the test, which
+ * never reaches the document.
+ */
+
+[data-dsh-boot] [class*='_wordmark_'] {
+  font-size: 0;
+}
+
+[data-dsh-boot] [class*='_wordmark_']::after {
+  content: 'QIALIKE';
+  font-size: 16px;
+  letter-spacing: 0.08em;
+}
+
+/*
+ * ── What is deliberately NOT overridden, and why ────────────────────────────
+ *
+ * The intent was to also repair upstream's hardcoded colours through this file.
+ * That turned out not to be safely reachable, and the finding is worth recording
+ * so the next attempt does not repeat it.
+ *
+ * Upstream component styles are CSS-module classes, and their class names are
+ * CONTENT-HASHED: `.H33bgG_selected`, `.pWDK-q_hoverTitle`, `.h1PvzG_taskTiming`.
+ * The hash changes on every upstream rebuild, so a selector cannot name one. The
+ * local part survives, which suggests `[class*="_selected"]` — but those local
+ * names are ordinary English (`_selected`, `_hoverTitle`, `_taskTiming`) and the
+ * same substrings appear in unrelated components, so a substring selector matches
+ * far more than intended and fails silently in the other direction.
+ *
+ * THE LIST OF "HARDCODED COLOURS TO REPAIR" THAT WAS HERE WAS WRONG, AND READING
+ * THE SURFACES RATHER THAN THE HEXES IS WHAT SHOWED IT. Three of the greys named
+ * are not theme-following surfaces that upstream forgot to tokenise; they are
+ * surfaces upstream paints dark in *every* theme on purpose, and the literal
+ * light labels on them are correct:
+ *
+ *   · The workspace and session hover cards. Their surface is a literal, not a
+ *     token: `--dsw-hovercard-bg: #2C2C2E` in `ui-primitives/HoverCard.module.css`,
+ *     with the comment "dark surface, fixed colors both themes" over the
+ *     `#FFFFFF` / `#CFD3D6` / `#ADB2B8` label steps in
+ *     `ui-workspace/.../Rows.module.css`, and a matching note in
+ *     `ui-schedule/.../SessionScheduleMark.module.css` ("surface is #2C2C2E in both
+ *     themes, so its label steps are literal light grays"). Nothing here needs
+ *     repair, and `#adb2b8` is upstream's own label step rather than a stray value.
+ *
+ *   · The theme picker's selection ring (`ui-theme/AppearanceRow.module.css`,
+ *     `.selected`). It uses `var(--dsw-static-neutral-bluish-400)`, and upstream
+ *     says why: "static token — the bluish-400 step has no alias-layer name". It is
+ *     a mid grey that reads on both a light and a dark cube, in upstream's own two
+ *     themes as much as in our sixteen. Overriding the static ramp to move it would
+ *     move every surface that chose a step of that ramp on purpose.
+ *
+ * The real instance of this failure class was not in a component's literal at all —
+ * it was in OUR OWN token mapping, and it was worse than a stray grey: recolouring
+ * `--dsw-alias-tooltip-bg` and `--dsw-alias-toast-bg` inverted a pair whose label
+ * upstream keeps fixed (white on a surface it paints dark in every theme), leaving
+ * the tooltip at 1.14:1 in One Light. That is fixed in
+ * `packages/qialike-desktop-theme/lib/tokens.js` (`FIXED_DARK_SURFACES`) and
+ * asserted in `tests/theme-legibility.test.mjs`, because legibility is arithmetic
+ * and does not need a display.
+ *
+ * The remaining mechanisms are deliberately unused:
+ *
+ *   · Overriding the static palette tokens the surviving literal-colour rules
+ *     consume (`--dsw-static-neutral-bluish-*`, `--dsw-static-deepseek-*`). Those
+ *     are a fixed lightness scale shared across the UI, so replacing them changes
+ *     every surface that chose a specific step on purpose — a visual-change
+ *     programme rather than a bug fix, and not one this file should start.
+ *   · The rest of the hardcoded colour *usages* in the client bundles are
+ *     semantically correct and should stay: `#0000` (transparent), the
+ *     `#0000000d`-family (shadows), `light-dark(...)` pairs, the `ui-layout` brand
+ *     gradient, and the white glyphs upstream deliberately puts on saturated fills
+ *     (`InputBar`'s send arrow, `FileCard`'s failure badge). The last two are the
+ *     one open question in this area: their surrounding fill IS ours, and in the
+ *     lighter schemes a white glyph on it measures as low as 1.49:1 against the
+ *     harness's own 2.16:1 worst. Deepening a palette accent that upstream also
+ *     reads as ink in four places is a visual decision, not a fix, so it is
+ *     recorded in DESIGN.md §7.3 with its measurements rather than done here.
+ */

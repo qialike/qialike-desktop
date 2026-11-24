@@ -1,0 +1,18 @@
+{
+  "name": "@qialike/qialike-desktop-policy",
+  "description": "The qialike policy row: the CLI's secrets read guard and shell fences, mounted on the host plane of this profile",
+  "version": "0.9.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/*.js"
+  ]
+}
